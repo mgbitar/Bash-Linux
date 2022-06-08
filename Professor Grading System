@@ -1,0 +1,262 @@
+#!/bin/bash
+
+s=$(ls -l students|awk '{print $9}')
+
+echo "Would you like to add new grades or change previous grades (add/change/update)"
+read option
+
+while [ $option != add ] && [ $option != change ] && [ $option != update ]
+do
+        echo "Please input an appropriate response (add/change/update)"
+        read option
+done
+
+if [ $option = add ]
+then
+        echo "Do you want to create a new gradebook (y/n)"
+        read new
+        while [ $new != y ] && [ $new != n ]
+        do
+                echo "Please input an appropriate response (y/n)"
+                read new
+        done
+
+        echo  What is the name of the assignment students completed that you\'d like to grade
+        read assign
+        first=$(ls -l ~/project/students/ | head -2 | tail -1 | awk '{print $9}')
+        while [ ! -f ~/project/students/$first/$assign ]
+                do
+                echo Please enter the name of the assignment students completed that you\'d like to grade
+                read assign
+                done
+
+        if  [ $new = "y" ]
+        then
+                touch gradebook
+                echo "student" > ~/project/gradebook
+                for name in $s
+                do
+                        echo $name >> ~/project/gradebook
+                done
+        fi
+
+        echo How many problems are in $assign
+        read num
+
+        while [ $num -le 0 ]
+                do
+                echo Please give the appropriate number of problems
+                read num
+                done
+        echo What is the correct answer for \#1
+        read answer
+        echo "$answer" > ~/project/temp1
+
+        for problem in $(seq 2 $num)
+                do
+                echo What is the correct answer for \#$problem
+                read answer
+                echo "$answer" >> ~/project/temp1
+        done
+        end=1
+
+        cat ~/project/temp1 | while read line
+        do
+                eval $line > temps$end
+                end=$((end+1))
+        done
+
+        echo "$assign" > ~/project/tempgradebook
+        for name in $s
+        do
+                grade=0
+                cd ~/project/students/$name
+                end=1
+                ck=1
+                upper=$(ls -l ~/project/ | grep "temps" | wc -l)
+                cat $assign | while read line
+                do
+                        eval $line > tempcheck$ck
+                        count=$(diff ~/project/temps$end ~/project/students/$name/tempcheck$ck | grep ">" | wc -l)
+                        if [ $count -gt 20 ] || [ $count -ge $(cat ~/project/temps$end | wc -l) ]
+                        then
+                                grade=$(bc <<< "scale=2;($grade+0)")
+                        elif [ $count -eq 0 ]
+                        then
+                                grade=$(bc <<< "scale=2;($grade+2)")
+                        else
+                                grade=$(bc <<< "scale=2;($grade+2-($num/10))")
+                        fi
+                                end=$((end+1))
+                                ck=$((ck+1))
+                echo $grade > ~/project/llgradebook
+        done
+        last=$(cat ~/project/llgradebook | tail -1)
+        echo "$last" >> ~/project/tempgradebook
+
+        if test -r ~/project/students/$name/temp2
+        then
+        rm  ~/project/students/$name/temp2
+        fi
+
+        if test -r ~/project/students/$name/tempcheck2
+        then
+        rm  ~/project/students/$name/tempcheck2
+        fi
+
+        if test -r ~/project/students/$name/tempcheck1
+        then
+        rm  ~/project/students/$name/tempcheck1
+        fi
+
+        done
+        paste -d","  ~/project/gradebook ~/project/tempgradebook > ~/project/pastebook
+        cat ~/project/pastebook > ~/project/gradebook
+
+elif [ $option = change ]
+        then
+        echo "Which assignment would you like to change"
+        cat gradebook
+        read assign
+        while ! grep -q ",$assign\b" gradebook
+        do
+        echo please enter an assignment as shown in the gradebook above        
+        read assign
+        done
+
+        echo "Which student's grades would you like to change"
+        read name
+        while ! grep -q  "^$name\," gradebook
+        do
+        echo please enter a students name as shown in the gradebook above
+                read name
+        done
+
+        count=1
+        for col in $(cat gradebook | sed -r "s/,/ /g")
+        do
+        if [ $col != $assign ]
+                then    count=$((count+1))
+        else
+                break
+        fi
+        done
+
+        echo How many full points would you like to give $name on $assign
+        read grade
+
+        while [ $grade -le 0 ]
+                do
+                echo Please give an appropriate response from 0 onwards
+                read grade
+                done
+
+        echo How many partial points out of 10 would you like to give $name on $assign
+        read partial
+
+        while [ $partial -lt 0 ] || [ $partial -gt 10 ]
+                do
+                echo Please give an appropriate response between the values 0-10
+                read partial
+                done
+
+        grade=$(echo "scale=2 ;$grade + ($partial/ 10)" | bc)
+        grade=",$grade"
+        awk -F"," -v n="$name" -v g="$grade" -v c="$count" '{OFS=FS}{if($1==n)$c=g;print}' gradebook > tempchange
+        cat tempchange | sed -r "s/,,/,/g"  > gradebook
+else
+        echo we will be updating gradebook, can you please give me the name of the previous gradebook
+        read old
+        while [ ! -f $old ]
+        do
+                echo Please give me the name of the old gradebook
+                read old
+        done
+        echo we will be pulling from $old. What column/assignment would you like to extract
+        cat $old
+        read assign
+
+        while ! grep -q ",$assign\b" oldgradebook
+        do
+        echo please enter an assignment as shown in the gradebook above
+        read assign
+        done
+
+        n=1
+        for col in $(sed -r "s/,/ /g" $old |  head -1)
+        do
+        if [ $col != $assign ]
+        then
+                n=$((n+1))
+        else
+                break
+        fi
+        done
+        awk -F"," -v c="$n" '{print $c}' $old > tempnew
+        paste  -d","  ~/project/gradebook  ~/project/tempnew > tempnew2
+        cat ~/project/tempnew2 > ~/project/gradebook
+fi
+echo The updated Gradebook reads as 
+cat ~/project/gradebook
+
+if test -r ~/project/tempnew
+        then
+        rm ~/project/tempnew
+        fi
+
+if test -r ~/project/pastebook
+        then
+        rm ~/project/pastebook
+        fi
+
+if test -r ~/project/tempchange
+
+        then
+        rm ~/project/tempchange
+        fi
+
+if test -r ~/project/tempnew2
+        then
+        rm ~/project/tempnew2
+        fi
+
+if test -r  ~/project/temp1
+        then
+        rm ~/project/temp1
+        fi
+
+if test -r  ~/project/temp2
+        then
+        rm  ~/project/temp2
+fi
+
+if test -r  ~/project/llgradebook
+        then
+        rm  ~/project/llgradebook
+fi
+
+if test -r  ~/project/tempgradebook
+        then
+        rm  ~/project/tempgradebook
+fi
+
+if test -r ~/project/temps3
+        then
+        rm ~/project/temps3
+        fi
+
+
+if test -r  ~/project/temps1
+        then
+        rm  ~/project/temps1
+fi
+
+if test -r  ~/project/temps1
+        then
+        rm  ~/project/temps1
+fi
+
+if test -r  ~/project/temps2
+        then
+        rm  ~/project/temps2
+fi
